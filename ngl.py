@@ -25,7 +25,7 @@ def render_ui(title, content):
                 padding: 2rem;
             }}
             .container {{
-                max-width: 600px;
+                max-width: 700px;
                 margin: auto;
                 background-color: #111;
                 padding: 2rem;
@@ -34,6 +34,8 @@ def render_ui(title, content):
             }}
             input, textarea {{ background: #222; color: #0f0; border: 1px solid #0f0; }}
             img.profile-pic {{ border-radius: 50%; width: 100px; height: 100px; object-fit: cover; margin-bottom: 10px; }}
+            .nav-tabs .nav-link.active {{ background-color: #0f0; color: #000; }}
+            .nav-tabs .nav-link {{ color: #0f0; }}
         </style>
     </head>
     <body>
@@ -64,12 +66,14 @@ def fetch_ig_data(username):
 
 @app.route('/')
 def home():
-    return render_ui("NGL Clone | Confess Now", '''
+    msg = request.args.get("link")
+    return render_ui("NGL Clone | Confess Now", f'''
         <h2 class="text-center">🕵️‍♂️ Anonymous Confession</h2>
         <form action="/u" method="get" class="mt-4">
             <input name="username" class="form-control mb-3" placeholder="Enter username (e.g. insta handle)" required>
             <button type="submit" class="btn btn-success w-100">Get Confession Link</button>
         </form>
+        {'<div class="alert alert-info mt-3">🔗 Share your confession link: <code>' + msg + '</code></div>' if msg else ''}
         <div class="text-center mt-4">
             <a href="/user/login" class="btn btn-outline-light">Already have an account? Login</a>
         </div>
@@ -78,7 +82,7 @@ def home():
 @app.route('/u')
 def redirect_to_user():
     username = request.args.get("username")
-    return redirect(f"/u/{username}") if username else "Username missing", 400
+    return redirect(f"/?link=/u/{username}") if username else "Username missing", 400
 
 @app.route('/u/<username>', methods=['GET', 'POST'])
 def confess(username):
@@ -170,10 +174,26 @@ def dashboard():
             <img src="{info['pic']}" class="profile-pic"><br>
             <strong>@{username}</strong><br><small>{info['bio']}</small>
         </div>
-        <hr>
-        <p class="mb-3">Share your confession link: <code>/u/{username}</code></p>
-        {msg_html if messages else '<p>No messages yet.</p>'}
-        <a href="/logout" class="btn btn-outline-light btn-sm mt-3">Logout</a>
+        <ul class="nav nav-tabs mt-4" id="myTab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="messages-tab" data-bs-toggle="tab" data-bs-target="#messages" type="button" role="tab">📥 Messages</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="share-tab" data-bs-toggle="tab" data-bs-target="#share" type="button" role="tab">🔗 Share</button>
+          </li>
+        </ul>
+        <div class="tab-content mt-3">
+          <div class="tab-pane fade show active" id="messages" role="tabpanel">
+            {msg_html if messages else '<p>No messages yet.</p>'}
+          </div>
+          <div class="tab-pane fade" id="share" role="tabpanel">
+            <p>🔗 Your confession link:</p>
+            <input class="form-control mb-3" value="/u/{username}" readonly onclick="this.select()">
+            <a href="https://www.instagram.com/direct/inbox/" target="_blank" class="btn btn-success w-100">Share on Instagram</a>
+          </div>
+        </div>
+        <a href="/logout" class="btn btn-outline-light btn-sm mt-4">Logout</a>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     ''')
 
 @app.route('/logout')
