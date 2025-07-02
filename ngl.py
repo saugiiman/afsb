@@ -1,10 +1,10 @@
 from flask import Flask, request, redirect, render_template_string, session, url_for
 import os
+import requests
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
-USERNAME = "saugiiman"
-PASSWORD = "saugiiman04"
 os.makedirs("confessions", exist_ok=True)
 
 # Bootstrap UI wrapper
@@ -33,6 +33,7 @@ def render_ui(title, content):
                 box-shadow: 0 0 10px #0f0;
             }}
             input, textarea {{ background: #222; color: #0f0; border: 1px solid #0f0; }}
+            img.profile-pic {{ border-radius: 50%; width: 100px; height: 100px; object-fit: cover; margin-bottom: 10px; }}
         </style>
     </head>
     <body>
@@ -43,14 +44,35 @@ def render_ui(title, content):
     </html>
     """)
 
+# Get profile picture and bio
+INSTAGRAM_CACHE = {}
+def fetch_ig_data(username):
+    if username in INSTAGRAM_CACHE:
+        return INSTAGRAM_CACHE[username]
+    url = f"https://www.instagram.com/{username}/"
+    try:
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        soup = BeautifulSoup(r.text, "html.parser")
+        data = r.text.split('"profile_pic_url_hd":"')[1].split('"')[0].replace("\\u0026", "&")
+        desc = soup.find("meta", {"name": "description"})["content"]
+        bio = desc.split("•")[-1].strip() if "•" in desc else desc
+        info = {"pic": data, "bio": bio}
+        INSTAGRAM_CACHE[username] = info
+        return info
+    except:
+        return {"pic": "", "bio": ""}
+
 @app.route('/')
 def home():
-    return render_ui("Get Confession Link", '''
-        <h2 class="text-center">🔐 PyNGL Confessions</h2>
+    return render_ui("NGL Clone | Confess Now", '''
+        <h2 class="text-center">🕵️‍♂️ Anonymous Confession</h2>
         <form action="/u" method="get" class="mt-4">
-            <input name="username" class="form-control mb-3" placeholder="Enter your username" required>
-            <button type="submit" class="btn btn-success w-100">Get My Link</button>
+            <input name="username" class="form-control mb-3" placeholder="Enter username (e.g. insta handle)" required>
+            <button type="submit" class="btn btn-success w-100">Get Confession Link</button>
         </form>
+        <div class="text-center mt-4">
+            <a href="/user/login" class="btn btn-outline-light">Already have an account? Login</a>
+        </div>
     ''')
 
 @app.route('/u')
@@ -68,8 +90,14 @@ def confess(username):
                 f.write(msg.strip() + "\n")
             return redirect(f"/u/{username}?sent=1")
     sent = request.args.get("sent")
+    info = fetch_ig_data(username)
     return render_ui(f"Confess to {username}", f'''
-        <h4>Send anonymous message to <span class="text-success">{username}</span></h4>
+        <div class='text-center'>
+            <img src="{info['pic']}" class="profile-pic"><br>
+            <strong>@{username}</strong><br><small>{info['bio']}</small>
+        </div>
+        <hr>
+        <h5>Send an anonymous message</h5>
         {"<div class='alert alert-success'>✅ Message sent!</div>" if sent else ""}
         <form method="post" class="mt-3">
             <textarea name="message" class="form-control mb-3" rows="4" required></textarea>
@@ -77,63 +105,81 @@ def confess(username):
         </form>
     ''')
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = ""
+@app.route('/user/login', methods=['GET', 'POST'])
+def user_login():
     if request.method == 'POST':
-        uname = request.form.get("username")
-        pwd = request.form.get("password")
-        if uname == USERNAME and pwd == PASSWORD:
-            session['admin'] = True
-            return redirect(url_for('admin'))
-        else:
-            error = "Invalid credentials"
-    return render_ui("Login", f'''
-        <h3 class="text-center">Admin Login</h3>
-        {f"<div class='alert alert-danger'>{error}</div>" if error else ""}
+        username = request.form.get('username').strip().lower()
+        session['user'] = username
+        return redirect('/dashboard')
+    return render_ui("User Login", '''
+        <h3 class="text-center">Login with Username</h3>
         <form method="post">
-            <input name="username" placeholder="Username" class="form-control mb-2" required>
-            <input name="password" type="password" placeholder="Password" class="form-control mb-3" required>
+            <input name="username" class="form-control mb-3" placeholder="Your Instagram username" required>
             <button class="btn btn-success w-100">Login</button>
         </form>
     ''')
 
-@app.route('/logout')
-def logout():
-    session.pop('admin', None)
-    return redirect('/')
+@app.route('/dashboard', methods=['GET', 'POST'])
+def dashboard():
+    username = session.get('user')
+    if not username:
+        return redirect('/user/login')
+    filepath = f"confessions/{username}.txt"
+    replypath = f"confessions/{username}_replies.txt"
 
-@app.route('/admin')
-def admin():
-    if not session.get('admin'):
-        return redirect(url_for('login'))
+    # Save reply
+    if request.method == "POST":
+        idx = int(request.form.get("index"))
+        reply = request.form.get("reply")
+        if reply:
+            with open(replypath, "a", encoding="utf-8") as f:
+                f.write(f"{idx}:{reply.strip()}\n")
 
-    users = os.listdir("confessions")
-    links = "".join(f"<li><a href='/admin/{u.replace('.txt','')}' class='text-success'>{u.replace('.txt','')}</a></li>" for u in users)
-    return render_ui("Admin Dashboard", f'''
-        <h3>Admin Panel</h3>
-        <ul>{links}</ul>
+    messages = []
+    if os.path.exists(filepath):
+        with open(filepath, 'r', encoding='utf-8') as f:
+            messages = [msg.strip() for msg in f.readlines()]
+
+    replies = {}
+    if os.path.exists(replypath):
+        with open(replypath, 'r', encoding='utf-8') as f:
+            for line in f:
+                parts = line.strip().split(":", 1)
+                if len(parts) == 2:
+                    replies[int(parts[0])] = parts[1]
+
+    info = fetch_ig_data(username)
+    msg_html = ""
+    for i, msg in enumerate(messages):
+        msg_html += f"""
+        <div class='card bg-dark text-light mb-3'>
+            <div class='card-body'>
+                <p>{msg}</p>
+                {f'<div class="mt-2"><strong>Reply:</strong> {replies[i]}</div>' if i in replies else f'''
+                <form method='post'>
+                    <input type='hidden' name='index' value='{i}'>
+                    <input name='reply' placeholder='Your reply' class='form-control form-control-sm mb-2'>
+                    <button class='btn btn-sm btn-outline-success'>Reply</button>
+                </form>'''}
+            </div>
+        </div>
+        """
+
+    return render_ui("Your Confessions", f'''
+        <div class='text-center'>
+            <img src="{info['pic']}" class="profile-pic"><br>
+            <strong>@{username}</strong><br><small>{info['bio']}</small>
+        </div>
+        <hr>
+        <p class="mb-3">Share your confession link: <code>/u/{username}</code></p>
+        {msg_html if messages else '<p>No messages yet.</p>'}
         <a href="/logout" class="btn btn-outline-light btn-sm mt-3">Logout</a>
     ''')
 
-@app.route('/admin/<username>')
-def view_user_msgs(username):
-    if not session.get('admin'):
-        return redirect(url_for('login'))
-
-    path = f"confessions/{username}.txt"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            messages = f.readlines()
-    else:
-        messages = []
-
-    return render_ui(f"Messages for {username}", f'''
-        <h4>Messages for {username}</h4>
-        {'<ul class="list-group">' + ''.join(f'<li class="list-group-item bg-dark text-success">{msg.strip()}</li>' for msg in messages) + '</ul>' if messages else '<p>No messages yet.</p>'}
-        <a href="/admin" class="btn btn-outline-light btn-sm mt-3">Back to Admin</a>
-    ''')
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect('/')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
-
