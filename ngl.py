@@ -73,7 +73,7 @@ def home():
             <input name="username" class="form-control mb-3" placeholder="Enter username (e.g. insta handle)" required>
             <button type="submit" class="btn btn-success w-100">Get Confession Link</button>
         </form>
-        {'<div class="alert alert-info mt-3">🔗 Share your confession link: <code>' + msg + '</code></div>' if msg else ''}
+        {f'<div class="alert alert-info mt-3">🔗 Your confession link:<br><input class="form-control mt-2" value="https://yourdomain.com{msg}" onclick="this.select()" readonly></div>' if msg else ''}
         <div class="text-center mt-4">
             <a href="/user/login" class="btn btn-outline-light">Already have an account? Login</a>
         </div>
@@ -121,79 +121,6 @@ def user_login():
             <input name="username" class="form-control mb-3" placeholder="Your Instagram username" required>
             <button class="btn btn-success w-100">Login</button>
         </form>
-    ''')
-
-@app.route('/dashboard', methods=['GET', 'POST'])
-def dashboard():
-    username = session.get('user')
-    if not username:
-        return redirect('/user/login')
-    filepath = f"confessions/{username}.txt"
-    replypath = f"confessions/{username}_replies.txt"
-
-    # Save reply
-    if request.method == "POST":
-        idx = int(request.form.get("index"))
-        reply = request.form.get("reply")
-        if reply:
-            with open(replypath, "a", encoding="utf-8") as f:
-                f.write(f"{idx}:{reply.strip()}\n")
-
-    messages = []
-    if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            messages = [msg.strip() for msg in f.readlines()]
-
-    replies = {}
-    if os.path.exists(replypath):
-        with open(replypath, 'r', encoding='utf-8') as f:
-            for line in f:
-                parts = line.strip().split(":", 1)
-                if len(parts) == 2:
-                    replies[int(parts[0])] = parts[1]
-
-    info = fetch_ig_data(username)
-    msg_html = ""
-    for i, msg in enumerate(messages):
-        msg_html += f"""
-        <div class='card bg-dark text-light mb-3'>
-            <div class='card-body'>
-                <p>{msg}</p>
-                {f'<div class="mt-2"><strong>Reply:</strong> {replies[i]}</div>' if i in replies else f'''
-                <form method='post'>
-                    <input type='hidden' name='index' value='{i}'>
-                    <input name='reply' placeholder='Your reply' class='form-control form-control-sm mb-2'>
-                    <button class='btn btn-sm btn-outline-success'>Reply</button>
-                </form>'''}
-            </div>
-        </div>
-        """
-
-    return render_ui("Your Confessions", f'''
-        <div class='text-center'>
-            <img src="{info['pic']}" class="profile-pic"><br>
-            <strong>@{username}</strong><br><small>{info['bio']}</small>
-        </div>
-        <ul class="nav nav-tabs mt-4" id="myTab" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="messages-tab" data-bs-toggle="tab" data-bs-target="#messages" type="button" role="tab">📥 Messages</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="share-tab" data-bs-toggle="tab" data-bs-target="#share" type="button" role="tab">🔗 Share</button>
-          </li>
-        </ul>
-        <div class="tab-content mt-3">
-          <div class="tab-pane fade show active" id="messages" role="tabpanel">
-            {msg_html if messages else '<p>No messages yet.</p>'}
-          </div>
-          <div class="tab-pane fade" id="share" role="tabpanel">
-            <p>🔗 Your confession link:</p>
-            <input class="form-control mb-3" value="/u/{username}" readonly onclick="this.select()">
-            <a href="https://www.instagram.com/direct/inbox/" target="_blank" class="btn btn-success w-100">Share on Instagram</a>
-          </div>
-        </div>
-        <a href="/logout" class="btn btn-outline-light btn-sm mt-4">Logout</a>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     ''')
 
 @app.route('/logout')
