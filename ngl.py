@@ -73,7 +73,7 @@ def home():
             <input name="username" class="form-control mb-3" placeholder="Enter username (e.g. insta handle)" required>
             <button type="submit" class="btn btn-success w-100">Get Confession Link</button>
         </form>
-        {f'<div class="alert alert-info mt-3">🔗 Your confession link:<br><input class="form-control mt-2" value="https://yourdomain.com{msg}" onclick="this.select()" readonly></div>' if msg else ''}
+        {f'<div class="alert alert-info mt-3">🔗 Your confession link:<br><input class="form-control mt-2" value="https://afsb.onrender.com{msg}" onclick="this.select()" readonly></div>' if msg else ''}
         <div class="text-center mt-4">
             <a href="/user/login" class="btn btn-outline-light">Already have an account? Login</a>
         </div>
